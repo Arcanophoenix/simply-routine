@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Simply Routine</string>
+    <string name="widget_description">Simply Routine — current time and events</string>
+    <string name="notification_channel_name">Simply Routine</string>
+    <string name="notification_channel_desc">Shows current time and events on lock screen</string>
+</resources>

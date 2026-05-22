@@ -1,0 +1,24 @@
+# Build output
+build/
+app/build/
+app/release/
+.gradle/
+
+# Local config (contains SDK path, never commit)
+local.properties
+
+# Keystores — keep these backed up separately, never in git
+*.jks
+*.keystore
+
+# Android Studio
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/asCodeStyleSettings.xml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# OS
+.DS_Store
+Thumbs.db

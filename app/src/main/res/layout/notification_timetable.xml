@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="120dp"
+    android:orientation="vertical">
+
+    <!-- Current event — top 3/4 (background set dynamically to event colour) -->
+    <LinearLayout
+        android:id="@+id/notification_top"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="3"
+        android:orientation="vertical"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp">
+
+        <TextView
+            android:id="@+id/tv_current_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="NOW"
+            android:textSize="9sp"
+            android:letterSpacing="0.12"
+            android:textColor="#99FFFFFF" />
+
+        <TextView
+            android:id="@+id/tv_current_event"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/tv_current_range"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="#99FFFFFF" />
+
+    </LinearLayout>
+
+    <!-- Next event — bottom 1/4 (background set dynamically to next event colour) -->
+    <Chronometer
+        android:id="@+id/chronometer_next"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:textSize="11sp"
+        android:textColor="#AAFFFFFF"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+</LinearLayout>
