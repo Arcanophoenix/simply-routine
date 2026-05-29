@@ -37,28 +37,34 @@ class TimetableWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val db = AppDatabase.getInstance(context)
-        val settings = SettingsRepository(context).settingsFlow.first()
-        val allEvents = db.eventDao().getAllEventsOnce()
-        val today = LocalDate.now()
-        val events = expandEventsForDate(allEvents, today)
-        val now = LocalTime.now()
-        val curMin = now.hour * 60 + now.minute
-        val nowSec = now.hour * 3600 + now.minute * 60 + now.second
+        try {
+            val db = AppDatabase.getInstance(context)
+            val settings = SettingsRepository(context).settingsFlow.first()
+            val allEvents = db.eventDao().getAllEventsOnce()
+            val today = LocalDate.now()
+            val events = expandEventsForDate(allEvents, today)
+            val now = LocalTime.now()
+            val curMin = now.hour * 60 + now.minute
+            val nowSec = now.hour * 3600 + now.minute * 60 + now.second
 
-        var nextEvent = events.filter { it.startMinutes > curMin }.minByOrNull { it.startMinutes }
-        var secsUntilNext = if (nextEvent != null)
-            (nextEvent.startMinutes * 60 - nowSec).coerceAtLeast(0).toLong()
-        else 0L
+            var nextEvent = events.filter { it.startMinutes > curMin }.minByOrNull { it.startMinutes }
+            var secsUntilNext = if (nextEvent != null)
+                (nextEvent.startMinutes * 60 - nowSec).coerceAtLeast(0).toLong()
+            else 0L
 
-        if (nextEvent == null && settings.showNextDayEvent) {
-            nextEvent = expandEventsForDate(allEvents, today.plusDays(1)).firstOrNull()
-            if (nextEvent != null)
-                secsUntilNext = (86400 - nowSec + nextEvent.startMinutes * 60).toLong()
-        }
+            if (nextEvent == null && settings.showNextDayEvent) {
+                nextEvent = expandEventsForDate(allEvents, today.plusDays(1)).firstOrNull()
+                if (nextEvent != null)
+                    secsUntilNext = (86400 - nowSec + nextEvent.startMinutes * 60).toLong()
+            }
 
-        provideContent {
-            WidgetContent(events, now, nextEvent, secsUntilNext)
+            provideContent {
+                WidgetContent(events, now, nextEvent, secsUntilNext)
+            }
+        } catch (_: Exception) {
+            provideContent {
+                WidgetContent(emptyList(), LocalTime.now(), null, 0L)
+            }
         }
     }
 }

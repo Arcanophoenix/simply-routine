@@ -32,7 +32,7 @@ class TimekeeperService : Service() {
     private val CHANNEL_ID = "timekeeper_channel"
     private val NOTIFICATION_ID = 1
 
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob() + CoroutineExceptionHandler { _, _ -> })
     private lateinit var notificationManager: NotificationManager
     private val db by lazy { AppDatabase.getInstance(this) }
     private val settingsRepo by lazy { SettingsRepository(this) }
@@ -74,27 +74,29 @@ class TimekeeperService : Service() {
 
     private fun updateAll() {
         scope.launch {
-            val settings = settingsRepo.settingsFlow.first()
-            val allEvents = db.eventDao().getAllEventsOnce()
-            val today = LocalDate.now()
-            val events = expandEventsForDate(allEvents, today)
-            val now = LocalTime.now()
-            val curMin = now.hour * 60 + now.minute
-            val nowSec = now.hour * 3600 + now.minute * 60 + now.second
+            try {
+                val settings = settingsRepo.settingsFlow.first()
+                val allEvents = db.eventDao().getAllEventsOnce()
+                val today = LocalDate.now()
+                val events = expandEventsForDate(allEvents, today)
+                val now = LocalTime.now()
+                val curMin = now.hour * 60 + now.minute
+                val nowSec = now.hour * 3600 + now.minute * 60 + now.second
 
-            var nextEvent = events.filter { it.startMinutes > curMin }.minByOrNull { it.startMinutes }
-            var secsUntilNext = if (nextEvent != null)
-                (nextEvent.startMinutes * 60 - nowSec).coerceAtLeast(0).toLong()
-            else 0L
+                var nextEvent = events.filter { it.startMinutes > curMin }.minByOrNull { it.startMinutes }
+                var secsUntilNext = if (nextEvent != null)
+                    (nextEvent.startMinutes * 60 - nowSec).coerceAtLeast(0).toLong()
+                else 0L
 
-            if (nextEvent == null && settings.showNextDayEvent) {
-                nextEvent = expandEventsForDate(allEvents, today.plusDays(1)).firstOrNull()
-                if (nextEvent != null)
-                    secsUntilNext = (86400 - nowSec + nextEvent.startMinutes * 60).toLong()
-            }
+                if (nextEvent == null && settings.showNextDayEvent) {
+                    nextEvent = expandEventsForDate(allEvents, today.plusDays(1)).firstOrNull()
+                    if (nextEvent != null)
+                        secsUntilNext = (86400 - nowSec + nextEvent.startMinutes * 60).toLong()
+                }
 
-            notificationManager.notify(NOTIFICATION_ID, buildNotification(events, nextEvent, secsUntilNext, curMin, now))
-            TimetableWidget().updateAll(this@TimekeeperService)
+                notificationManager.notify(NOTIFICATION_ID, buildNotification(events, nextEvent, secsUntilNext, curMin, now))
+                TimetableWidget().updateAll(this@TimekeeperService)
+            } catch (_: Exception) { }
         }
     }
 

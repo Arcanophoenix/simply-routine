@@ -64,6 +64,9 @@ dependencies {
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
+    // WorkManager (used to start the foreground service after boot on Android 15+)
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
+
     // Glance widget
     implementation("androidx.glance:glance-appwidget:1.1.1")
     implementation("androidx.glance:glance-material3:1.1.1")
