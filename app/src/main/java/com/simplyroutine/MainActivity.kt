@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
             TimeKeeperTheme {
                 val navController = rememberNavController()
                 val events by viewModel.events.collectAsState()
+                val tasks by viewModel.tasks.collectAsState()
                 val settings by viewModel.settings.collectAsState()
                 val currentTime by viewModel.currentTime.collectAsState()
 
@@ -69,6 +70,7 @@ class MainActivity : ComponentActivity() {
                     composable("timetable") {
                         TimetableScreen(
                             events = events,
+                            tasks = tasks,
                             settings = settings,
                             currentTime = currentTime,
                             onAddEvent = { date, startMin ->
@@ -89,6 +91,9 @@ class MainActivity : ComponentActivity() {
                                     parentId = base.id,
                                 )
                             },
+                            onAddTask = viewModel::addTask,
+                            onUpdateTask = viewModel::updateTask,
+                            onDeleteTask = viewModel::deleteTask,
                             onPinWidget = {
                                 val manager = AppWidgetManager.getInstance(this@MainActivity)
                                 val provider = ComponentName(this@MainActivity, TimetableWidgetReceiver::class.java)

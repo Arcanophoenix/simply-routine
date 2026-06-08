@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Widgets
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,6 +45,7 @@ import androidx.compose.ui.window.Dialog
 import com.simplyroutine.data.Event
 import com.simplyroutine.data.RepeatType
 import com.simplyroutine.data.Settings
+import com.simplyroutine.data.Task
 import com.simplyroutine.data.expandEventsForDate
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -63,11 +65,15 @@ private const val INITIAL_PAGE = 500
 @Composable
 fun TimetableScreen(
     events: List<Event>,
+    tasks: List<Task>,
     settings: Settings,
     currentTime: LocalTime,
     onAddEvent: (date: LocalDate, startMinutes: Int) -> Unit,
     onEditEvent: (Event) -> Unit,
     onEditOccurrence: (event: Event, date: LocalDate) -> Unit,
+    onAddTask: (Task) -> Unit,
+    onUpdateTask: (Task) -> Unit,
+    onDeleteTask: (Task) -> Unit,
     onPinWidget: () -> Unit,
     onNavigateToSettings: () -> Unit,
     tourState: TourState? = null,
@@ -98,6 +104,8 @@ fun TimetableScreen(
     var recurringTap by remember { mutableStateOf<Pair<Event, LocalDate>?>(null) }
     // Month picker
     var showMonthPicker by remember { mutableStateOf(false) }
+    // Task tracker
+    var showTaskTracker by remember { mutableStateOf(false) }
     var pickerMonth by remember { mutableStateOf(YearMonth.now()) }
 
     Scaffold(
@@ -126,6 +134,9 @@ fun TimetableScreen(
                     )
                 },
                 actions = {
+                    IconButton(onClick = { showTaskTracker = true }) {
+                        Icon(Icons.Outlined.CheckCircle, contentDescription = "Task tracker")
+                    }
                     IconButton(
                         onClick = onPinWidget,
                         modifier = Modifier.onGloballyPositioned { tourState?.widgetBtnBounds = it.boundsInRoot() },
@@ -322,6 +333,16 @@ fun TimetableScreen(
             dismissButton = {
                 TextButton(onClick = { eventsToChoose = null }) { Text("Cancel") }
             },
+        )
+    }
+
+    if (showTaskTracker) {
+        TaskTrackerDialog(
+            tasks = tasks,
+            onDismiss = { showTaskTracker = false },
+            onAdd = onAddTask,
+            onUpdate = onUpdateTask,
+            onDelete = onDeleteTask,
         )
     }
 

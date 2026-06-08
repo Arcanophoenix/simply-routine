@@ -7,6 +7,7 @@ import com.simplyroutine.data.AppDatabase
 import com.simplyroutine.data.Event
 import com.simplyroutine.data.Settings
 import com.simplyroutine.data.SettingsRepository
+import com.simplyroutine.data.Task
 import com.simplyroutine.service.AlertScheduler
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +22,9 @@ class TimetableViewModel(app: Application) : AndroidViewModel(app) {
     private val settingsRepo = SettingsRepository(app)
 
     val events: StateFlow<List<Event>> = db.eventDao().getAllEvents()
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    val tasks: StateFlow<List<Task>> = db.taskDao().getAllTasks()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val settings: StateFlow<Settings> = settingsRepo.settingsFlow
@@ -54,6 +58,10 @@ class TimetableViewModel(app: Application) : AndroidViewModel(app) {
         AlertScheduler.cancel(getApplication(), event)
         db.eventDao().delete(event)
     }
+    fun addTask(task: Task) = viewModelScope.launch { db.taskDao().insert(task) }
+    fun updateTask(task: Task) = viewModelScope.launch { db.taskDao().update(task) }
+    fun deleteTask(task: Task) = viewModelScope.launch { db.taskDao().delete(task) }
+
     fun updateDayStart(minutes: Int) = viewModelScope.launch { settingsRepo.updateDayStart(minutes) }
     fun updateDayEnd(minutes: Int) = viewModelScope.launch { settingsRepo.updateDayEnd(minutes) }
     fun updateTapToAdd(value: Boolean) = viewModelScope.launch { settingsRepo.updateTapToAdd(value) }
