@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.simplyroutine.data.AppDatabase
 import com.simplyroutine.data.Event
 import com.simplyroutine.data.FirestoreRepository
+import com.simplyroutine.data.Occasion
 import com.simplyroutine.data.Settings
 import com.simplyroutine.data.SettingsRepository
 import com.simplyroutine.data.Task
@@ -37,6 +38,9 @@ class TimetableViewModel(app: Application) : AndroidViewModel(app) {
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val tasks: StateFlow<List<Task>> = db.taskDao().getAllTasks()
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    val occasions: StateFlow<List<Occasion>> = db.occasionDao().getAllOccasions()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val settings: StateFlow<Settings> = settingsRepo.settingsFlow
@@ -160,6 +164,10 @@ class TimetableViewModel(app: Application) : AndroidViewModel(app) {
     fun leaveHousehold() = viewModelScope.launch {
         settingsRepo.updateHouseholdId(null)
     }
+
+    fun addOccasion(occasion: Occasion) = viewModelScope.launch { db.occasionDao().insert(occasion) }
+    fun updateOccasion(occasion: Occasion) = viewModelScope.launch { db.occasionDao().update(occasion) }
+    fun deleteOccasion(occasion: Occasion) = viewModelScope.launch { db.occasionDao().delete(occasion) }
 
     fun updateDayStart(minutes: Int) = viewModelScope.launch { settingsRepo.updateDayStart(minutes) }
     fun updateDayEnd(minutes: Int) = viewModelScope.launch { settingsRepo.updateDayEnd(minutes) }

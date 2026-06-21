@@ -17,6 +17,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.simplyroutine.data.Event
 import com.simplyroutine.data.ICalParser
+import com.simplyroutine.data.Occasion
 import com.simplyroutine.data.RepeatType
 import com.simplyroutine.service.TimekeeperService
 import com.simplyroutine.widget.TimetableWidgetReceiver
@@ -74,6 +75,7 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val events by viewModel.events.collectAsState()
                 val tasks by viewModel.tasks.collectAsState()
+                val occasions by viewModel.occasions.collectAsState()
                 val settings by viewModel.settings.collectAsState()
                 val currentTime by viewModel.currentTime.collectAsState()
 
@@ -102,6 +104,10 @@ class MainActivity : ComponentActivity() {
                         TimetableScreen(
                             events = events,
                             tasks = tasks,
+                            occasions = occasions,
+                            onAddOccasion = viewModel::addOccasion,
+                            onUpdateOccasion = viewModel::updateOccasion,
+                            onDeleteOccasion = viewModel::deleteOccasion,
                             settings = settings,
                             currentTime = currentTime,
                             onAddEvent = { date, startMin ->

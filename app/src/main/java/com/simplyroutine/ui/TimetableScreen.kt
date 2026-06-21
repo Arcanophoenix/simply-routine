@@ -43,10 +43,12 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.window.Dialog
 import com.simplyroutine.data.Event
+import com.simplyroutine.data.Occasion
 import com.simplyroutine.data.RepeatType
 import com.simplyroutine.data.Settings
 import com.simplyroutine.data.Task
 import com.simplyroutine.data.expandEventsForDate
+import com.simplyroutine.data.forDate
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -78,6 +80,10 @@ fun TimetableScreen(
     onCreateHousehold: () -> Unit,
     onJoinHousehold: (String, (Boolean) -> Unit) -> Unit,
     onLeaveHousehold: () -> Unit,
+    occasions: List<Occasion>,
+    onAddOccasion: (Occasion) -> Unit,
+    onUpdateOccasion: (Occasion) -> Unit,
+    onDeleteOccasion: (Occasion) -> Unit,
     onPinWidget: () -> Unit,
     onPinTaskListWidget: () -> Unit,
     onNavigateToSettings: () -> Unit,
@@ -111,6 +117,7 @@ fun TimetableScreen(
     var recurringTap by remember { mutableStateOf<Pair<Event, LocalDate>?>(null) }
     // Month picker
     var showMonthPicker by remember { mutableStateOf(false) }
+    var tappedDate by remember { mutableStateOf<LocalDate?>(null) }
     // Task tracker
     var showTaskTracker by remember { mutableStateOf(false) }
     LaunchedEffect(openTaskTracker) {
@@ -186,6 +193,8 @@ fun TimetableScreen(
                 weekStart = currentWeekStart,
                 today = today,
                 labelWidthDp = LABEL_W.dp,
+                occasions = occasions,
+                onDateTap = { tappedDate = it },
             )
 
             val scrollState = rememberScrollState()
@@ -364,6 +373,17 @@ fun TimetableScreen(
         )
     }
 
+    tappedDate?.let { date ->
+        OccasionDialog(
+            date = date,
+            occasions = occasions.forDate(date),
+            onDismiss = { tappedDate = null },
+            onAdd = onAddOccasion,
+            onUpdate = onUpdateOccasion,
+            onDelete = onDeleteOccasion,
+        )
+    }
+
     if (showMonthPicker) {
         Dialog(onDismissRequest = { showMonthPicker = false }) {
             Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 4.dp) {
@@ -471,8 +491,11 @@ private fun WeekDayHeader(
     weekStart: LocalDate,
     today: LocalDate,
     labelWidthDp: Dp,
+    occasions: List<Occasion>,
+    onDateTap: (LocalDate) -> Unit,
 ) {
     val dayNames = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+    val accentColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)
     HorizontalDivider(thickness = 0.5.dp)
     Row(
         modifier = Modifier
@@ -484,8 +507,11 @@ private fun WeekDayHeader(
         for (i in 0..6) {
             val date = weekStart.plusDays(i.toLong())
             val isToday = date == today
+            val hasOccasion = occasions.any { it.month == date.monthValue && it.day == date.dayOfMonth }
             Column(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onDateTap(date) },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
@@ -501,6 +527,17 @@ private fun WeekDayHeader(
                     color = if (isToday) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurface,
                 )
+                Spacer(Modifier.height(2.dp))
+                Box(
+                    modifier = Modifier
+                        .width(18.dp)
+                        .height(2.dp)
+                        .background(
+                            if (hasOccasion) accentColor else Color.Transparent,
+                            RoundedCornerShape(1.dp),
+                        ),
+                )
+                Spacer(Modifier.height(2.dp))
             }
         }
     }

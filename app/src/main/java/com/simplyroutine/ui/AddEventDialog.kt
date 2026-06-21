@@ -664,6 +664,8 @@ private fun repeatLabel(type: RepeatType, interval: Int): String = when (type) {
     RepeatType.WEEKENDS -> "Weekends (Sat & Sun)"
     RepeatType.EVERY_N_DAYS -> "Every $interval ${if (interval == 1) "day" else "days"}"
     RepeatType.EVERY_N_WEEKS -> "Every $interval ${if (interval == 1) "week" else "weeks"}"
+    RepeatType.MONTHLY -> "Monthly"
+    RepeatType.YEARLY -> "Yearly"
 }
 
 private fun staticRepeatLabel(type: RepeatType): String = when (type) {
@@ -673,6 +675,8 @@ private fun staticRepeatLabel(type: RepeatType): String = when (type) {
     RepeatType.WEEKENDS -> "Weekends (Sat & Sun)"
     RepeatType.EVERY_N_DAYS -> "Every N days…"
     RepeatType.EVERY_N_WEEKS -> "Every N weeks…"
+    RepeatType.MONTHLY -> "Monthly"
+    RepeatType.YEARLY -> "Yearly"
 }
 
 private fun trimExistingEvent(existing: Event, newEvent: Event): Event? {
