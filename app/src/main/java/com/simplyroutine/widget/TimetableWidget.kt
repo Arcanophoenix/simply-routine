@@ -3,6 +3,7 @@ package com.simplyroutine.widget
 import android.content.Context
 import android.content.Intent
 import android.graphics.Paint
+import android.util.TypedValue
 import android.os.SystemClock
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -18,7 +19,6 @@ import androidx.glance.appwidget.provideContent
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
-import androidx.glance.layout.defaultWeight
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
@@ -173,6 +173,38 @@ private fun WidgetContent(
         }
     }
 
+    // Hoist occasion computation so we can derive heights before layout
+    val dm = context.resources.displayMetrics
+    val availableWidthPx = (LocalSize.current.width - 24.dp).value * dm.density
+    val dotJoined = todayOccasionTitles.joinToString(" · ")
+    var occasionFontSp = 13f
+    var occasionMaxLines = 1
+
+    if (todayOccasionTitles.isNotEmpty()) {
+        val paint = Paint()
+        paint.textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, occasionFontSp, dm)
+        while (paint.measureText(dotJoined) > availableWidthPx && occasionFontSp > 10f) {
+            occasionFontSp -= 0.5f
+            paint.textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, occasionFontSp, dm)
+        }
+        if (paint.measureText(dotJoined) > availableWidthPx) {
+            occasionMaxLines = 2
+            occasionFontSp = 13f
+            paint.textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, occasionFontSp, dm)
+            while (paint.measureText(dotJoined) > availableWidthPx * 2) {
+                occasionFontSp -= 0.5f
+                paint.textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, occasionFontSp, dm)
+            }
+        }
+    }
+
+    val occasionBarH = when {
+        todayOccasionTitles.isEmpty() -> 0.dp
+        occasionMaxLines == 2 -> 60.dp
+        else -> 40.dp
+    }
+    val topH = LocalSize.current.height - bottomStripH - occasionBarH
+
     Column(modifier = GlanceModifier.fillMaxSize().clickable(openApp)) {
 
         // ── Occasion bar: shown only on days with an occasion ──
@@ -183,36 +215,10 @@ private fun WidgetContent(
                 Color(0xFF3D3560)
             val occasionText = occasionBg.contrastingText()
 
-            val dm = LocalContext.current.resources.displayMetrics
-            val availableWidthPx = (LocalSize.current.width - 24.dp).value * dm.density
-            val dotJoined = todayOccasionTitles.joinToString(" · ")
-            val paint = Paint()
-
-            // Phase 1: scale down trying to fit on one line, floor at 10sp
-            var occasionFontSp = 13f
-            paint.textSize = occasionFontSp * dm.scaledDensity
-            while (paint.measureText(dotJoined) > availableWidthPx && occasionFontSp > 10f) {
-                occasionFontSp -= 0.5f
-                paint.textSize = occasionFontSp * dm.scaledDensity
-            }
-
-            // Phase 2: if it still doesn't fit, switch to 2 lines and scale with no floor
-            val occasionMaxLines: Int
-            if (paint.measureText(dotJoined) <= availableWidthPx) {
-                occasionMaxLines = 1
-            } else {
-                occasionMaxLines = 2
-                occasionFontSp = 13f
-                paint.textSize = occasionFontSp * dm.scaledDensity
-                while (paint.measureText(dotJoined) > availableWidthPx * 2) {
-                    occasionFontSp -= 0.5f
-                    paint.textSize = occasionFontSp * dm.scaledDensity
-                }
-            }
-
             Box(
                 modifier = GlanceModifier
                     .fillMaxWidth()
+                    .height(occasionBarH)
                     .background(ColorProvider(occasionBg))
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center,
@@ -234,7 +240,7 @@ private fun WidgetContent(
         Box(
             modifier = GlanceModifier
                 .fillMaxWidth()
-                .defaultWeight()
+                .height(topH)
                 .background(ColorProvider(topBg)),
             contentAlignment = Alignment.Center,
         ) {

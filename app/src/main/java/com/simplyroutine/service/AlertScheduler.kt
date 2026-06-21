@@ -123,6 +123,8 @@ object AlertScheduler {
                 ChronoUnit.WEEKS.between(startMon, thisMon) % event.repeatInterval == 0L &&
                     (event.repeatDays and (1 shl (date.dayOfWeek.value - 1))) != 0
             }
+            RepeatType.MONTHLY -> date.dayOfMonth == start.dayOfMonth
+            RepeatType.YEARLY -> date.monthValue == start.monthValue && date.dayOfMonth == start.dayOfMonth
         }
     }
 }

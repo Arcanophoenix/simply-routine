@@ -5,10 +5,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface OccasionDao {
-    @Query("SELECT * FROM occasions ORDER BY month, day, title")
+    @Query("SELECT * FROM occasions ORDER BY date, title")
     fun getAllOccasions(): Flow<List<Occasion>>
 
-    @Query("SELECT * FROM occasions ORDER BY month, day, title")
+    @Query("SELECT * FROM occasions ORDER BY date, title")
     suspend fun getAllOccasionsOnce(): List<Occasion>
 
     @Insert

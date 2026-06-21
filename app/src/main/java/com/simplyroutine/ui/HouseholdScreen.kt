@@ -133,7 +133,7 @@ private fun HouseholdContent(
                 onClick = onLeaveHousehold,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                border = ButtonDefaults.outlinedButtonBorder.copy(brush = SolidColor(MaterialTheme.colorScheme.error)),
+                border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(brush = SolidColor(MaterialTheme.colorScheme.error)),
             ) {
                 Text("Leave household")
             }

@@ -507,7 +507,7 @@ private fun WeekDayHeader(
         for (i in 0..6) {
             val date = weekStart.plusDays(i.toLong())
             val isToday = date == today
-            val hasOccasion = occasions.any { it.month == date.monthValue && it.day == date.dayOfMonth }
+            val hasOccasion = occasions.forDate(date).isNotEmpty()
             Column(
                 modifier = Modifier
                     .weight(1f)
