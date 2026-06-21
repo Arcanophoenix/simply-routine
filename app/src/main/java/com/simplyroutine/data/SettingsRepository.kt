@@ -22,6 +22,10 @@ class SettingsRepository(private val context: Context) {
     private val RESET_SCROLL        = booleanPreferencesKey("reset_scroll_on_week_change")
     private val DEFAULT_ALERT       = intPreferencesKey("default_alert_minutes")
     private val TOUR_SEEN           = booleanPreferencesKey("tour_seen")
+    private val SHOW_NOTIFICATION        = booleanPreferencesKey("show_notification")
+    private val HOUSEHOLD_ID             = stringPreferencesKey("household_id")
+    private val WIDGET_HIDE_COMPLETED    = booleanPreferencesKey("widget_hide_completed")
+    private val WIDGET_HIDE_DAYS_OUT     = intPreferencesKey("widget_hide_days_out")
 
     val settingsFlow: Flow<Settings> = context.dataStore.data.map { prefs ->
         Settings(
@@ -33,6 +37,10 @@ class SettingsRepository(private val context: Context) {
             resetScrollOnWeekChange= prefs[RESET_SCROLL]        ?: false,
             defaultAlertMinutes    = prefs[DEFAULT_ALERT]       ?: -1,
             tourSeen               = prefs[TOUR_SEEN]           ?: false,
+            showNotification       = prefs[SHOW_NOTIFICATION]   ?: true,
+            householdId            = prefs[HOUSEHOLD_ID],
+            widgetHideCompleted    = prefs[WIDGET_HIDE_COMPLETED] ?: false,
+            widgetHideDaysOut      = prefs[WIDGET_HIDE_DAYS_OUT]  ?: 0,
         )
     }
 
@@ -66,5 +74,23 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun updateTourSeen(value: Boolean) {
         context.dataStore.edit { it[TOUR_SEEN] = value }
+    }
+
+    suspend fun updateShowNotification(value: Boolean) {
+        context.dataStore.edit { it[SHOW_NOTIFICATION] = value }
+    }
+
+    suspend fun updateHouseholdId(value: String?) {
+        context.dataStore.edit {
+            if (value == null) it.remove(HOUSEHOLD_ID) else it[HOUSEHOLD_ID] = value
+        }
+    }
+
+    suspend fun updateWidgetHideCompleted(value: Boolean) {
+        context.dataStore.edit { it[WIDGET_HIDE_COMPLETED] = value }
+    }
+
+    suspend fun updateWidgetHideDaysOut(value: Int) {
+        context.dataStore.edit { it[WIDGET_HIDE_DAYS_OUT] = value }
     }
 }

@@ -7,13 +7,16 @@ import android.os.Build
 import android.os.Bundle
 import android.text.format.DateFormat
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.*
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.simplyroutine.data.Event
+import com.simplyroutine.data.ICalParser
 import com.simplyroutine.data.RepeatType
 import com.simplyroutine.service.TimekeeperService
 import com.simplyroutine.widget.TimetableWidgetReceiver
@@ -29,14 +32,42 @@ import java.time.LocalTime
 
 class MainActivity : ComponentActivity() {
     private val viewModel: TimetableViewModel by viewModels()
+    private var openTasksFromWidget by mutableStateOf(false)
+    private var icalEventDraft by mutableStateOf<Event?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra("open_tasks", false)) openTasksFromWidget = true
+        handleICalIntent(intent)
+    }
+
+    private fun handleICalIntent(intent: Intent) {
+        if (intent.type != "text/calendar") return
+        val uri = intent.data ?: return
+        try {
+            val text = contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return
+            val parsed = ICalParser.parse(text) ?: return
+            icalEventDraft = Event(
+                title = parsed.title,
+                date = parsed.date.toEpochDay(),
+                startMinutes = parsed.startMinutes,
+                endMinutes = parsed.endMinutes,
+            )
+        } catch (_: Exception) {}
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge(
+            navigationBarStyle = SystemBarStyle.dark(0x80000000.toInt()),
+        )
         super.onCreate(savedInstanceState)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 0)
         }
         startForegroundService(Intent(this, TimekeeperService::class.java))
+        if (intent.getBooleanExtra("open_tasks", false)) openTasksFromWidget = true
+        handleICalIntent(intent)
 
         setContent {
             TimeKeeperTheme {
@@ -94,6 +125,10 @@ class MainActivity : ComponentActivity() {
                             onAddTask = viewModel::addTask,
                             onUpdateTask = viewModel::updateTask,
                             onDeleteTask = viewModel::deleteTask,
+                            householdId = settings.householdId,
+                            onCreateHousehold = viewModel::createHousehold,
+                            onJoinHousehold = viewModel::joinHousehold,
+                            onLeaveHousehold = viewModel::leaveHousehold,
                             onPinWidget = {
                                 val manager = AppWidgetManager.getInstance(this@MainActivity)
                                 val provider = ComponentName(this@MainActivity, TimetableWidgetReceiver::class.java)
@@ -101,8 +136,17 @@ class MainActivity : ComponentActivity() {
                                     manager.requestPinAppWidget(provider, null, null)
                                 }
                             },
+                            onPinTaskListWidget = {
+                                val manager = AppWidgetManager.getInstance(this@MainActivity)
+                                val provider = ComponentName(this@MainActivity, com.simplyroutine.widget.TaskListWidgetReceiver::class.java)
+                                if (manager.isRequestPinAppWidgetSupported) {
+                                    manager.requestPinAppWidget(provider, null, null)
+                                }
+                            },
                             onNavigateToSettings = { navController.navigate("settings") },
                             tourState = tourState,
+                            openTaskTracker = openTasksFromWidget,
+                            onTaskTrackerOpened = { openTasksFromWidget = false },
                         )
                     }
                     composable("settings") {
@@ -116,6 +160,9 @@ class MainActivity : ComponentActivity() {
                             onUpdateTimeFormat = viewModel::updateTimeFormat,
                             onUpdateResetScrollOnWeekChange = viewModel::updateResetScrollOnWeekChange,
                             onUpdateDefaultAlertMinutes = viewModel::updateDefaultAlertMinutes,
+                            onUpdateShowNotification = viewModel::updateShowNotification,
+                            onUpdateWidgetHideCompleted = viewModel::updateWidgetHideCompleted,
+                            onUpdateWidgetHideDaysOut = viewModel::updateWidgetHideDaysOut,
                             onStartTour = { tourState.start() },
                             onNavigateBack = { navController.popBackStack() },
                         )
@@ -189,6 +236,25 @@ class MainActivity : ComponentActivity() {
                                 occurrenceBase = null
                             }
                         } else null,
+                    )
+                }
+
+                icalEventDraft?.let { draft ->
+                    AddEventDialog(
+                        event = draft,
+                        existingEvents = events,
+                        defaultAlertMinutes = settings.defaultAlertMinutes,
+                        is24Hour = is24Hour,
+                        onDismiss = { icalEventDraft = null },
+                        onSave = { event ->
+                            viewModel.addEvent(event)
+                            icalEventDraft = null
+                        },
+                        onResolveConflicts = { toUpdate, toDelete, toAdd ->
+                            toUpdate.forEach { viewModel.updateEvent(it) }
+                            toDelete.forEach { viewModel.deleteEvent(it) }
+                            toAdd.forEach { viewModel.addEvent(it) }
+                        },
                     )
                 }
             }

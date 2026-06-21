@@ -7,16 +7,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -27,15 +27,21 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.util.UUID
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun TaskTrackerDialog(
     tasks: List<Task>,
+    householdId: String?,
     onDismiss: () -> Unit,
     onAdd: (Task) -> Unit,
     onUpdate: (Task) -> Unit,
     onDelete: (Task) -> Unit,
+    onCreateHousehold: () -> Unit,
+    onJoinHousehold: (String, (Boolean) -> Unit) -> Unit,
+    onLeaveHousehold: () -> Unit,
+    onPinTaskListWidget: () -> Unit,
 ) {
     val today = remember { LocalDate.now() }
     val sorted = remember(tasks) {
@@ -44,6 +50,7 @@ fun TaskTrackerDialog(
 
     var showAddEdit by remember { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<Task?>(null) }
+    var showHousehold by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -72,6 +79,21 @@ fun TaskTrackerDialog(
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.weight(1f),
                     )
+                    IconButton(onClick = onPinTaskListWidget) {
+                        Icon(
+                            Icons.Default.Widgets,
+                            contentDescription = "Add tasks widget",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = { showHousehold = true }) {
+                        Icon(
+                            Icons.Outlined.Home,
+                            contentDescription = "Household sync",
+                            tint = if (householdId != null) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     IconButton(onClick = { editingTask = null; showAddEdit = true }) {
                         Icon(Icons.Default.Add, contentDescription = "Add task")
                     }
@@ -96,7 +118,7 @@ fun TaskTrackerDialog(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(vertical = 8.dp),
                     ) {
-                        items(sorted, key = { it.id }) { task ->
+                        items(sorted) { task ->
                             TaskRow(
                                 task = task,
                                 today = today,
@@ -113,6 +135,7 @@ fun TaskTrackerDialog(
     if (showAddEdit) {
         TaskEditDialog(
             task = editingTask,
+            householdId = householdId,
             onDismiss = { showAddEdit = false; editingTask = null },
             onSave = { saved ->
                 if (saved.id == 0) onAdd(saved) else onUpdate(saved)
@@ -120,6 +143,16 @@ fun TaskTrackerDialog(
                 editingTask = null
             },
             onDelete = editingTask?.let { t -> { onDelete(t); showAddEdit = false; editingTask = null } },
+        )
+    }
+
+    if (showHousehold) {
+        HouseholdDialog(
+            householdId = householdId,
+            onCreateHousehold = onCreateHousehold,
+            onJoinHousehold = onJoinHousehold,
+            onLeaveHousehold = onLeaveHousehold,
+            onDismiss = { showHousehold = false },
         )
     }
 }
@@ -137,13 +170,15 @@ private fun TaskRow(
     val lastDone = task.lastCompletedDate
     val doneToday = lastDone == today
 
+    val scheduleStr = when (task.frequencyUnit) {
+        "none"   -> "no schedule"
+        "months" -> "every ${task.frequencyDays} ${if (task.frequencyDays == 1) "month" else "months"}"
+        else     -> "every ${frequencyLabel(task.frequencyDays)}"
+    }
     val subtitle = when {
-        lastDone == null -> "Never done · every ${frequencyLabel(task.frequencyDays)}"
-        doneToday        -> "Done today · every ${frequencyLabel(task.frequencyDays)}"
-        else             -> {
-            val days = ChronoUnit.DAYS.between(lastDone, today)
-            "${days}d ago · every ${frequencyLabel(task.frequencyDays)}"
-        }
+        lastDone == null -> "Never done · $scheduleStr"
+        doneToday        -> "Done today · $scheduleStr"
+        else             -> "${ChronoUnit.DAYS.between(lastDone, today)}d ago · $scheduleStr"
     }
 
     Row(
@@ -161,7 +196,18 @@ private fun TaskRow(
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(task.title, style = MaterialTheme.typography.bodyLarge)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(task.title, style = MaterialTheme.typography.bodyLarge)
+                if (task.shared) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        Icons.Outlined.Home,
+                        contentDescription = "Shared",
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodySmall,
@@ -185,17 +231,30 @@ private fun TaskRow(
 @Composable
 private fun TaskEditDialog(
     task: Task?,
+    householdId: String?,
     onDismiss: () -> Unit,
     onSave: (Task) -> Unit,
     onDelete: (() -> Unit)?,
 ) {
     val isEdit = task != null
     var title by remember { mutableStateOf(task?.title ?: "") }
-    var freqText by remember { mutableStateOf(task?.frequencyDays?.toString() ?: "1") }
+    var freqUnit by remember { mutableStateOf(task?.frequencyUnit ?: "days") }
+    var freqInterval by remember { mutableStateOf(if (task?.frequencyUnit == "none") 1 else task?.frequencyDays ?: 1) }
+    val namedPresets = remember {
+        setOf(Pair("days", 1), Pair("days", 7), Pair("days", 14), Pair("months", 1), Pair("months", 3), Pair("months", 12))
+    }
+    var customFreq by remember {
+        mutableStateOf(
+            task != null && task.frequencyUnit != "none" &&
+                Pair(task.frequencyUnit, task.frequencyDays) !in namedPresets
+        )
+    }
+    var showFreqDropdown by remember { mutableStateOf(false) }
     var lastCompleted by remember { mutableStateOf(task?.lastCompletedDate) }
+    var shared by remember { mutableStateOf(task?.shared ?: false) }
     var showDatePicker by remember { mutableStateOf(false) }
 
-    val valid = title.isNotBlank() && freqText.toIntOrNull()?.let { it >= 1 } == true
+    val valid = title.isNotBlank() && (freqUnit == "none" || freqInterval >= 1)
     val dateFmt = DateTimeFormatter.ofPattern("MMM d, yyyy")
 
     AlertDialog(
@@ -210,14 +269,90 @@ private fun TaskEditDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
-                    value = freqText,
-                    onValueChange = { freqText = it.filter { c -> c.isDigit() } },
-                    label = { Text("Every N days") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                ExposedDropdownMenuBox(
+                    expanded = showFreqDropdown,
+                    onExpandedChange = { showFreqDropdown = it },
+                ) {
+                    OutlinedTextField(
+                        value = freqLabel(freqUnit, freqInterval),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Schedule") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showFreqDropdown) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = showFreqDropdown,
+                        onDismissRequest = { showFreqDropdown = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("No schedule") },
+                            onClick = { freqUnit = "none"; customFreq = false; showFreqDropdown = false },
+                        )
+                        listOf(
+                            "Daily"       to Pair("days",   1),
+                            "Weekly"      to Pair("days",   7),
+                            "Fortnightly" to Pair("days",  14),
+                            "Monthly"     to Pair("months", 1),
+                            "Quarterly"   to Pair("months", 3),
+                            "Yearly"      to Pair("months", 12),
+                        ).forEach { (label, unitInterval) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    freqUnit = unitInterval.first
+                                    freqInterval = unitInterval.second
+                                    customFreq = false
+                                    showFreqDropdown = false
+                                },
+                            )
+                        }
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("Every N days…") },
+                            onClick = {
+                                if (freqUnit != "days") { freqUnit = "days"; freqInterval = 1 }
+                                customFreq = true
+                                showFreqDropdown = false
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Every N months…") },
+                            onClick = {
+                                if (freqUnit != "months") { freqUnit = "months"; freqInterval = 1 }
+                                customFreq = true
+                                showFreqDropdown = false
+                            },
+                        )
+                    }
+                }
+                if (freqUnit != "none" && customFreq) {
+                    val unitWord = if (freqUnit == "months") {
+                        if (freqInterval == 1) "month" else "months"
+                    } else {
+                        if (freqInterval == 1) "day" else "days"
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("Every", style = MaterialTheme.typography.bodyMedium)
+                        FilledTonalIconButton(
+                            onClick = { if (freqInterval > 1) freqInterval-- },
+                            modifier = Modifier.size(36.dp),
+                        ) { Text("−") }
+                        Text(
+                            "$freqInterval",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.widthIn(min = 24.dp),
+                        )
+                        FilledTonalIconButton(
+                            onClick = { if (freqInterval < 99) freqInterval++ },
+                            modifier = Modifier.size(36.dp),
+                        ) { Text("+") }
+                        Text(unitWord, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -236,6 +371,26 @@ private fun TaskEditDialog(
                     }
                     TextButton(onClick = { showDatePicker = true }) { Text("Change") }
                 }
+                if (householdId != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Sync with household",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text(
+                                householdId,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(checked = shared, onCheckedChange = { shared = it })
+                    }
+                }
                 if (onDelete != null) {
                     TextButton(
                         onClick = onDelete,
@@ -252,12 +407,14 @@ private fun TaskEditDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    val freq = freqText.toIntOrNull()?.coerceAtLeast(1) ?: 1
                     onSave(Task(
                         id = task?.id ?: 0,
                         title = title.trim(),
-                        frequencyDays = freq,
+                        frequencyDays = if (freqUnit == "none") 1 else freqInterval,
+                        frequencyUnit = freqUnit,
                         lastCompleted = lastCompleted?.toEpochDay(),
+                        syncId = task?.syncId ?: UUID.randomUUID().toString(),
+                        shared = shared,
                     ))
                 },
                 enabled = valid,
@@ -293,10 +450,23 @@ private fun TaskEditDialog(
 }
 
 private fun urgencyColor(score: Float): Color = when {
-    score == Float.MAX_VALUE || score >= 1.5f -> Color(0xFF9575CD)  // soft purple — significantly overdue
-    score >= 1.0f                             -> Color(0xFFFF8A65)  // soft coral — due now
-    score >= 0.7f                             -> Color(0xFFFFCC80)  // soft amber — coming up soon
-    else                                      -> Color(0xFF81C784)  // soft green — well ahead
+    score < 0f                                -> Color(0xFF64B5F6)  // blue — no schedule
+    score == Float.MAX_VALUE || score >= 1.5f -> Color(0xFF9575CD)  // purple — significantly overdue
+    score >= 1.0f                             -> Color(0xFFFF8A65)  // coral — due now
+    score >= 0.7f                             -> Color(0xFFFFCC80)  // amber — coming up soon
+    else                                      -> Color(0xFF81C784)  // green — well ahead
+}
+
+private fun freqLabel(unit: String, interval: Int): String = when {
+    unit == "none"                     -> "No schedule"
+    unit == "months" && interval == 1  -> "Monthly"
+    unit == "months" && interval == 3  -> "Quarterly"
+    unit == "months" && interval == 12 -> "Yearly"
+    unit == "days"   && interval == 1  -> "Daily"
+    unit == "days"   && interval == 7  -> "Weekly"
+    unit == "days"   && interval == 14 -> "Fortnightly"
+    unit == "months"                   -> "Every $interval months"
+    else                               -> "Every $interval days"
 }
 
 private fun frequencyLabel(days: Int): String = when (days) {

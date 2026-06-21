@@ -121,7 +121,6 @@ fun TourOverlay(
         }
 
         val step = TOUR_STEPS[state.step]
-        val screenHeightPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
 
         // Keep card centre in the middle 50% of screen (25%–75%), nudging away from the spotlight.
         val spotlightCentreY = (animatedRect.top + animatedRect.bottom) / 2f

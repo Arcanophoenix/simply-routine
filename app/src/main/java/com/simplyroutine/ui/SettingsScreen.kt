@@ -13,7 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.simplyroutine.data.ALERT_OPTIONS
 import com.simplyroutine.data.Settings
+import com.simplyroutine.data.WIDGET_DAYS_OUT_OPTIONS
 import com.simplyroutine.data.alertLabel
+import com.simplyroutine.data.widgetDaysOutLabel
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -29,12 +31,16 @@ fun SettingsScreen(
     onUpdateTimeFormat: (String) -> Unit,
     onUpdateResetScrollOnWeekChange: (Boolean) -> Unit,
     onUpdateDefaultAlertMinutes: (Int) -> Unit,
+    onUpdateShowNotification: (Boolean) -> Unit,
+    onUpdateWidgetHideCompleted: (Boolean) -> Unit,
+    onUpdateWidgetHideDaysOut: (Int) -> Unit,
     onStartTour: () -> Unit,
     onNavigateBack: () -> Unit,
 ) {
     var showStartPicker by remember { mutableStateOf(false) }
     var showEndPicker by remember { mutableStateOf(false) }
     var showAlertDropdown by remember { mutableStateOf(false) }
+    var showDaysOutDropdown by remember { mutableStateOf(false) }
 
     if (showStartPicker) {
         TimePickerDialog(
@@ -188,6 +194,18 @@ fun SettingsScreen(
             )
 
             ListItem(
+                headlineContent = { Text("Show persistent notification") },
+                supportingContent = { Text("Displays current and next event in your notification shade") },
+                trailingContent = {
+                    Switch(
+                        checked = settings.showNotification,
+                        onCheckedChange = onUpdateShowNotification,
+                    )
+                },
+                modifier = Modifier.clickable { onUpdateShowNotification(!settings.showNotification) },
+            )
+            HorizontalDivider()
+            ListItem(
                 headlineContent = { Text("Default alert for new events") },
                 supportingContent = {
                     Column {
@@ -212,6 +230,59 @@ fun SettingsScreen(
                                     DropdownMenuItem(
                                         text = { Text(alertLabel(mins)) },
                                         onClick = { onUpdateDefaultAlertMinutes(mins); showAlertDropdown = false },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+            )
+            HorizontalDivider()
+
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Tasks widget",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+
+            ListItem(
+                headlineContent = { Text("Hide completed tasks") },
+                supportingContent = { Text("Tasks marked done today won't appear in the widget") },
+                trailingContent = {
+                    Switch(
+                        checked = settings.widgetHideCompleted,
+                        onCheckedChange = onUpdateWidgetHideCompleted,
+                    )
+                },
+                modifier = Modifier.clickable { onUpdateWidgetHideCompleted(!settings.widgetHideCompleted) },
+            )
+            HorizontalDivider()
+            ListItem(
+                headlineContent = { Text("Hide far-ahead tasks") },
+                supportingContent = {
+                    Column {
+                        Text("Only show tasks due within the selected window")
+                        ExposedDropdownMenuBox(
+                            expanded = showDaysOutDropdown,
+                            onExpandedChange = { showDaysOutDropdown = it },
+                            modifier = Modifier.padding(top = 8.dp),
+                        ) {
+                            OutlinedTextField(
+                                value = widgetDaysOutLabel(settings.widgetHideDaysOut),
+                                onValueChange = {},
+                                readOnly = true,
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showDaysOutDropdown) },
+                                modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                            )
+                            ExposedDropdownMenu(
+                                expanded = showDaysOutDropdown,
+                                onDismissRequest = { showDaysOutDropdown = false },
+                            ) {
+                                WIDGET_DAYS_OUT_OPTIONS.forEach { days ->
+                                    DropdownMenuItem(
+                                        text = { Text(widgetDaysOutLabel(days)) },
+                                        onClick = { onUpdateWidgetHideDaysOut(days); showDaysOutDropdown = false },
                                     )
                                 }
                             }

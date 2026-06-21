@@ -32,12 +32,19 @@ import com.simplyroutine.data.ALERT_OPTIONS_POSITIVE
 import com.simplyroutine.data.Event
 import com.simplyroutine.data.RepeatType
 import com.simplyroutine.data.alertLabel
+import com.simplyroutine.data.expandEventsForDate
 import com.simplyroutine.data.parseAlertMinutes
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+
+private data class ConflictEntry(
+    val occurrence: Event,
+    val parent: Event,
+    val trimmed: Event?,
+)
 
 private val EVENT_COLORS = listOf(
     0xFF4CAF50.toInt(),
@@ -122,7 +129,7 @@ fun AddEventDialog(
 
     // Pending conflict resolution
     var pendingEvent by remember { mutableStateOf<Event?>(null) }
-    var pendingConflicts by remember { mutableStateOf<List<Pair<Event, Event?>>>(emptyList()) }
+    var pendingConflicts by remember { mutableStateOf<List<ConflictEntry>>(emptyList()) }
 
     if (showStartPicker) {
         TimePickerDialog(
@@ -169,14 +176,50 @@ fun AddEventDialog(
     if (pendingEvent != null) {
         val newEv = pendingEvent!!
         val isSingle = pendingConflicts.size == 1
-        val original = if (isSingle) pendingConflicts[0].first else null
+        val singleEntry = if (isSingle) pendingConflicts[0] else null
+        val occ = singleEntry?.occurrence
 
-        val canSplit    = original != null && original.startMinutes < newEv.startMinutes && original.endMinutes > newEv.endMinutes
-        val canTrimEnd  = original != null && original.startMinutes < newEv.startMinutes
-        val canTrimStart= original != null && original.endMinutes   > newEv.endMinutes
-        val canDelete   = original != null && original.startMinutes >= newEv.startMinutes && original.endMinutes <= newEv.endMinutes
+        val canSplit     = occ != null && occ.startMinutes < newEv.startMinutes && occ.endMinutes > newEv.endMinutes
+        val canTrimEnd   = occ != null && occ.startMinutes < newEv.startMinutes
+        val canTrimStart = occ != null && occ.endMinutes   > newEv.endMinutes
+        val canDelete    = occ != null && occ.startMinutes >= newEv.startMinutes && occ.endMinutes <= newEv.endMinutes
 
         fun dismiss() { pendingEvent = null; pendingConflicts = emptyList() }
+
+        // Resolves a single conflict entry into (toUpdate, toDelete, toAdd) lists.
+        // For occurrences of a recurring event that aren't on the base date, we add an
+        // exception to the parent and create standalone events for the trimmed/split pieces.
+        fun resolveEntry(
+            entry: ConflictEntry,
+            splitLeft: Event? = null,
+            splitRight: Event? = null,
+            trimPiece: Event? = null,
+            remove: Boolean = false,
+        ): Triple<List<Event>, List<Event>, List<Event>> {
+            val isRecurringOccurrence = entry.parent.localDate != entry.occurrence.localDate
+            return if (isRecurringOccurrence) {
+                val parentWithException = entry.parent.withException(entry.occurrence.localDate)
+                val toAdd = buildList {
+                    fun standaloneFrom(e: Event) = e.copy(
+                        id = 0, repeatType = RepeatType.NONE.name,
+                        repeatInterval = 1, repeatDays = 0, exceptDates = "", parentId = 0,
+                    )
+                    if (splitLeft != null)  add(standaloneFrom(splitLeft))
+                    if (splitRight != null) add(standaloneFrom(splitRight))
+                    if (trimPiece != null)  add(standaloneFrom(trimPiece))
+                }
+                Triple(listOf(parentWithException), emptyList(), toAdd)
+            } else {
+                val occ = entry.occurrence
+                val toUpdate = buildList<Event> {
+                    if (splitLeft  != null) add(splitLeft)
+                    if (trimPiece  != null) add(trimPiece)
+                }
+                val toDelete  = if (remove || (splitLeft == null && trimPiece == null && splitRight == null)) listOf(occ) else emptyList()
+                val toAdd     = if (splitRight != null) listOf(splitRight) else emptyList()
+                Triple(toUpdate, toDelete, toAdd)
+            }
+        }
 
         Dialog(onDismissRequest = ::dismiss) {
             Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 4.dp) {
@@ -188,16 +231,17 @@ fun AddEventDialog(
 
                     // Conflict list
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        pendingConflicts.forEach { (orig, _) ->
+                        pendingConflicts.forEach { entry ->
+                            val o = entry.occurrence
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(
                                     modifier = Modifier
                                         .size(8.dp)
-                                        .background(Color(orig.color), CircleShape),
+                                        .background(Color(o.color), CircleShape),
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    "${orig.title}  ${formatMin(orig.startMinutes)} – ${formatMin(orig.endMinutes)}",
+                                    "${o.title}  ${formatMin(o.startMinutes)} – ${formatMin(o.endMinutes)}",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
@@ -211,53 +255,63 @@ fun AddEventDialog(
                         if (canSplit) {
                             OutlinedButton(
                                 onClick = {
-                                    val orig = original!!
-                                    val left = orig.copy(endMinutes = newEv.startMinutes)
-                                    val right = orig.copy(id = 0, startMinutes = newEv.endMinutes)
+                                    val left  = occ!!.copy(endMinutes   = newEv.startMinutes)
+                                    val right = occ.copy(startMinutes = newEv.endMinutes)
+                                    val (toUpdate, toDelete, toAdd) = resolveEntry(singleEntry!!, splitLeft = left, splitRight = right)
                                     onSave(newEv)
-                                    onResolveConflicts(listOf(left), emptyList(), listOf(right))
+                                    onResolveConflicts(toUpdate, toDelete, toAdd)
                                     dismiss()
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                            ) { Text("Split \"${original!!.title}\" around this") }
+                            ) { Text("Split \"${occ!!.title}\" around this") }
                         }
                         if (canTrimEnd) {
                             OutlinedButton(
                                 onClick = {
+                                    val trimmed = occ!!.copy(endMinutes = newEv.startMinutes)
+                                    val (toUpdate, toDelete, toAdd) = resolveEntry(singleEntry!!, trimPiece = trimmed)
                                     onSave(newEv)
-                                    onResolveConflicts(listOf(original!!.copy(endMinutes = newEv.startMinutes)), emptyList(), emptyList())
+                                    onResolveConflicts(toUpdate, toDelete, toAdd)
                                     dismiss()
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                            ) { Text("Keep \"${original!!.title}\" before this") }
+                            ) { Text("Keep \"${occ!!.title}\" before this") }
                         }
                         if (canTrimStart) {
                             OutlinedButton(
                                 onClick = {
+                                    val trimmed = occ!!.copy(startMinutes = newEv.endMinutes)
+                                    val (toUpdate, toDelete, toAdd) = resolveEntry(singleEntry!!, trimPiece = trimmed)
                                     onSave(newEv)
-                                    onResolveConflicts(listOf(original!!.copy(startMinutes = newEv.endMinutes)), emptyList(), emptyList())
+                                    onResolveConflicts(toUpdate, toDelete, toAdd)
                                     dismiss()
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                            ) { Text("Keep \"${original!!.title}\" after this") }
+                            ) { Text("Keep \"${occ!!.title}\" after this") }
                         }
                         if (canDelete) {
                             OutlinedButton(
                                 onClick = {
+                                    val (toUpdate, toDelete, toAdd) = resolveEntry(singleEntry!!, remove = true)
                                     onSave(newEv)
-                                    onResolveConflicts(emptyList(), listOf(original!!), emptyList())
+                                    onResolveConflicts(toUpdate, toDelete, toAdd)
                                     dismiss()
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                            ) { Text("Remove \"${original!!.title}\"") }
+                            ) { Text("Remove \"${occ!!.title}\"") }
                         }
                         if (!isSingle) {
                             OutlinedButton(
                                 onClick = {
-                                    val toUpdate = pendingConflicts.mapNotNull { it.second }
-                                    val toDelete = pendingConflicts.filter { it.second == null }.map { it.first }
+                                    val toUpdate = mutableListOf<Event>()
+                                    val toDelete = mutableListOf<Event>()
+                                    val toAdd    = mutableListOf<Event>()
+                                    pendingConflicts.forEach { entry ->
+                                        val (u, d, a) = resolveEntry(entry, trimPiece = entry.trimmed, remove = entry.trimmed == null)
+                                        toUpdate += u; toDelete += d; toAdd += a
+                                    }
                                     onSave(newEv)
-                                    onResolveConflicts(toUpdate, toDelete, emptyList())
+                                    onResolveConflicts(toUpdate, toDelete, toAdd)
                                     dismiss()
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -576,11 +630,13 @@ fun AddEventDialog(
                                 parentId = event?.parentId ?: 0,
                                 alertMinutes = alerts.distinct().sorted().joinToString(","),
                             )
-                            val conflicts = existingEvents
-                                .filter { it.id != newEvent.id }
-                                .filter { it.date == newEvent.date }
+                            val candidates = existingEvents.filter { it.id != newEvent.id }
+                            val conflicts = expandEventsForDate(candidates, newEvent.localDate)
                                 .filter { it.startMinutes < newEvent.endMinutes && it.endMinutes > newEvent.startMinutes }
-                                .map { it to trimExistingEvent(it, newEvent) }
+                                .map { occ ->
+                                    val parent = candidates.first { it.id == occ.id }
+                                    ConflictEntry(occ, parent, trimExistingEvent(occ, newEvent))
+                                }
                             if (conflicts.isEmpty()) {
                                 onSave(newEvent)
                             } else {

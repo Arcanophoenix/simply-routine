@@ -3,6 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 android {
@@ -13,8 +15,8 @@ android {
         applicationId = "com.simplyroutine"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 13
+        versionName = "2.2"
     }
 
     buildTypes {
@@ -22,6 +24,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            ndk { debugSymbolLevel = "FULL" }
         }
     }
 
@@ -67,9 +70,18 @@ dependencies {
     // WorkManager (used to start the foreground service after boot on Android 15+)
     implementation("androidx.work:work-runtime-ktx:2.10.0")
 
+    // Force fragment to a non-deprecated version (transitive dep comes in at 1.1.0)
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
+
     // Glance widget
     implementation("androidx.glance:glance-appwidget:1.1.1")
     implementation("androidx.glance:glance-material3:1.1.1")
+
+    // Firebase
+    implementation(platform("com.google.firebase:firebase-bom:34.14.0"))
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-messaging")
+    implementation("com.google.firebase:firebase-crashlytics")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

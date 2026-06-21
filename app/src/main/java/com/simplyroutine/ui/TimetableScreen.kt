@@ -74,9 +74,16 @@ fun TimetableScreen(
     onAddTask: (Task) -> Unit,
     onUpdateTask: (Task) -> Unit,
     onDeleteTask: (Task) -> Unit,
+    householdId: String?,
+    onCreateHousehold: () -> Unit,
+    onJoinHousehold: (String, (Boolean) -> Unit) -> Unit,
+    onLeaveHousehold: () -> Unit,
     onPinWidget: () -> Unit,
+    onPinTaskListWidget: () -> Unit,
     onNavigateToSettings: () -> Unit,
     tourState: TourState? = null,
+    openTaskTracker: Boolean = false,
+    onTaskTrackerOpened: () -> Unit = {},
 ) {
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
@@ -106,6 +113,12 @@ fun TimetableScreen(
     var showMonthPicker by remember { mutableStateOf(false) }
     // Task tracker
     var showTaskTracker by remember { mutableStateOf(false) }
+    LaunchedEffect(openTaskTracker) {
+        if (openTaskTracker) {
+            showTaskTracker = true
+            onTaskTrackerOpened()
+        }
+    }
     var pickerMonth by remember { mutableStateOf(YearMonth.now()) }
 
     Scaffold(
@@ -339,10 +352,15 @@ fun TimetableScreen(
     if (showTaskTracker) {
         TaskTrackerDialog(
             tasks = tasks,
+            householdId = householdId,
             onDismiss = { showTaskTracker = false },
             onAdd = onAddTask,
             onUpdate = onUpdateTask,
             onDelete = onDeleteTask,
+            onCreateHousehold = onCreateHousehold,
+            onJoinHousehold = onJoinHousehold,
+            onLeaveHousehold = onLeaveHousehold,
+            onPinTaskListWidget = onPinTaskListWidget,
         )
     }
 

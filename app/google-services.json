@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "380419138411",
+    "project_id": "simply-routine",
+    "storage_bucket": "simply-routine.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:380419138411:android:89eaef58423be4eea1a22e",
+        "android_client_info": {
+          "package_name": "com.simplyroutine"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1ygVcOzj0vlVXb7ZVOuC2JLbjBMAwpjU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

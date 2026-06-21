@@ -20,7 +20,9 @@ import androidx.glance.appwidget.updateAll
 import com.simplyroutine.R
 import com.simplyroutine.data.AppDatabase
 import com.simplyroutine.data.Event
+import com.simplyroutine.data.FirestoreRepository
 import com.simplyroutine.data.SettingsRepository
+import com.simplyroutine.widget.TaskListWidget
 import com.simplyroutine.widget.TimetableWidget
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.drop
@@ -52,13 +54,25 @@ class TimekeeperService : Service() {
         scope.launch {
             settingsRepo.settingsFlow.drop(1).collect { updateAll() }
         }
+        // Sync shared tasks from Firestore every 15 minutes
+        scope.launch {
+            while (isActive) {
+                syncSharedTasks()
+                TaskListWidget().updateAll(this@TimekeeperService)
+                delay(15 * 60 * 1000L)
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, buildSimpleNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            startForeground(NOTIFICATION_ID, buildSimpleNotification())
+        try {
+            startForegroundCompat(buildSimpleNotification())
+        } catch (_: Exception) {
+            // Android 12+ rejects startForeground() when the app is in the background (e.g.
+            // system restart of a START_STICKY service). Stop cleanly — MainActivity will
+            // restart us next time the user opens the app.
+            stopSelf()
+            return START_NOT_STICKY
         }
         updateAll()
         return START_STICKY
@@ -71,6 +85,34 @@ class TimekeeperService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private suspend fun syncSharedTasks() {
+        val householdId = settingsRepo.settingsFlow.first().householdId ?: return
+        try {
+            val remoteTasks = FirestoreRepository().observeSharedTasks(householdId).first()
+            val remoteSyncIds = remoteTasks.map { it.syncId }.toSet()
+            remoteTasks.forEach { remote ->
+                val local = db.taskDao().getBySyncId(remote.syncId)
+                if (local == null) {
+                    db.taskDao().insert(remote.copy(id = 0))
+                } else if (local.lastCompleted != remote.lastCompleted ||
+                    local.title != remote.title ||
+                    local.frequencyDays != remote.frequencyDays ||
+                    local.frequencyUnit != remote.frequencyUnit
+                ) {
+                    db.taskDao().update(local.copy(
+                        title = remote.title,
+                        frequencyDays = remote.frequencyDays,
+                        frequencyUnit = remote.frequencyUnit,
+                        lastCompleted = remote.lastCompleted,
+                    ))
+                }
+            }
+            db.taskDao().getSharedTasks().forEach { local ->
+                if (local.syncId !in remoteSyncIds) db.taskDao().update(local.copy(shared = false))
+            }
+        } catch (_: Exception) {}
+    }
 
     private fun updateAll() {
         scope.launch {
@@ -94,9 +136,27 @@ class TimekeeperService : Service() {
                         secsUntilNext = (86400 - nowSec + nextEvent.startMinutes * 60).toLong()
                 }
 
-                notificationManager.notify(NOTIFICATION_ID, buildNotification(events, nextEvent, secsUntilNext, curMin, now))
+                if (settings.showNotification) {
+                    startForegroundCompat(buildNotification(events, nextEvent, secsUntilNext, curMin, now))
+                } else {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        stopForeground(true)
+                    }
+                }
                 TimetableWidget().updateAll(this@TimekeeperService)
+                TaskListWidget().updateAll(this@TimekeeperService)
             } catch (_: Exception) { }
+        }
+    }
+
+    private fun startForegroundCompat(notification: Notification) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
         }
     }
 
